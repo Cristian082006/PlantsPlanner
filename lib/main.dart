@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'screens/camera_screen.dart';
 import 'screens/home_screen.dart';
+import 'services/local_plant_model_service.dart';
 import 'services/notification_service.dart';
 import 'theme/app_theme.dart';
 
@@ -38,6 +39,7 @@ class _RootScreenState extends State<RootScreen> {
     super.initState();
     NotificationService.instance.init();
     NotificationService.instance.requestPermissions();
+    LocalPlantModelService.instance.load();
   }
 
   void _selectTab(int index) {

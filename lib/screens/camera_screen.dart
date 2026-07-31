@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../models/plant_prediction.dart';
+import '../services/local_plant_model_service.dart';
 import '../services/plant_id_service.dart';
 import '../theme/app_theme.dart';
 import 'confirm_plant_screen.dart';
@@ -125,20 +127,34 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   Future<void> _identify() async {
     if (_shots.isEmpty) return;
     final shots = List<_Shot>.from(_shots);
+    final representative = shots.firstWhere((s) => s.organ == 'auto', orElse: () => shots.first);
 
     setState(() => _status = _Status.classifying);
     try {
-      final predictions = await PlantIdService.instance.classifyImages(
-        shots.map((s) => File(s.path)).toList(),
-        shots.map((s) => s.organ).toList(),
-      );
+      final localPredictions = await LocalPlantModelService.instance
+          .classifyImageFile(File(representative.path))
+          .catchError((_) => <PlantPrediction>[]);
 
-      final representative = shots.firstWhere((s) => s.organ == 'auto', orElse: () => shots.first);
+      // Only fall back to the Pl@ntNet API (network + rate-limited) when the
+      // local model couldn't identify anything.
+      final plantNetPredictions = localPredictions.isEmpty
+          ? await PlantIdService.instance
+              .classifyImages(shots.map((s) => File(s.path)).toList(), shots.map((s) => s.organ).toList())
+              .catchError((_) => <PlantPrediction>[])
+          : <PlantPrediction>[];
+
+      if (plantNetPredictions.isEmpty && localPredictions.isEmpty) {
+        throw StateError('Identificarea a eșuat pentru ambele surse (Pl@ntNet și modelul local).');
+      }
 
       if (!mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => ConfirmPlantScreen(photoPath: representative.path, predictions: predictions),
+          builder: (_) => ConfirmPlantScreen(
+            photoPath: representative.path,
+            plantNetPredictions: plantNetPredictions,
+            localPredictions: localPredictions,
+          ),
         ),
       );
 

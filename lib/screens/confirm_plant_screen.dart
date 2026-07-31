@@ -8,30 +8,55 @@ import '../theme/app_theme.dart';
 import '../widgets/species_thumbnail.dart';
 import 'plant_detail_screen.dart';
 
+enum _Source { plantNet, local, manual }
+
+class _Selection {
+  final _Source source;
+  final int index;
+  final String scientificName;
+  final double confidence;
+
+  const _Selection({
+    required this.source,
+    required this.index,
+    required this.scientificName,
+    required this.confidence,
+  });
+}
+
 class ConfirmPlantScreen extends StatefulWidget {
   final String photoPath;
-  final List<PlantPrediction> predictions;
+  final List<PlantPrediction> plantNetPredictions;
+  final List<PlantPrediction> localPredictions;
 
-  const ConfirmPlantScreen({super.key, required this.photoPath, required this.predictions});
+  const ConfirmPlantScreen({
+    super.key,
+    required this.photoPath,
+    required this.plantNetPredictions,
+    required this.localPredictions,
+  });
 
   @override
   State<ConfirmPlantScreen> createState() => _ConfirmPlantScreenState();
 }
 
 class _ConfirmPlantScreenState extends State<ConfirmPlantScreen> {
-  late int _selectedIndex;
+  late _Selection _selection;
   late TextEditingController _nameController;
   bool _saving = false;
-  String? _manualScientificName;
 
-  String get _effectiveScientificName => _manualScientificName ?? widget.predictions[_selectedIndex].scientificName;
-  double get _effectiveConfidence => _manualScientificName != null ? 1.0 : widget.predictions[_selectedIndex].confidence;
-  CareInfo get _care => getCareInfo(_effectiveScientificName);
+  CareInfo get _care => getCareInfo(_selection.scientificName);
 
   @override
   void initState() {
     super.initState();
-    _selectedIndex = 0;
+    if (widget.plantNetPredictions.isNotEmpty) {
+      final p = widget.plantNetPredictions[0];
+      _selection = _Selection(source: _Source.plantNet, index: 0, scientificName: p.scientificName, confidence: p.confidence);
+    } else {
+      final p = widget.localPredictions[0];
+      _selection = _Selection(source: _Source.local, index: 0, scientificName: p.scientificName, confidence: p.confidence);
+    }
     _nameController = TextEditingController(text: _care.commonNameRo);
   }
 
@@ -41,11 +66,15 @@ class _ConfirmPlantScreenState extends State<ConfirmPlantScreen> {
     super.dispose();
   }
 
-  void _selectPrediction(int index) {
+  void _select(_Source source, int index, PlantPrediction prediction) {
     setState(() {
-      _selectedIndex = index;
-      _manualScientificName = null;
-      _nameController.text = getCareInfo(widget.predictions[index].scientificName).commonNameRo;
+      _selection = _Selection(
+        source: source,
+        index: index,
+        scientificName: prediction.scientificName,
+        confidence: prediction.confidence,
+      );
+      _nameController.text = getCareInfo(prediction.scientificName).commonNameRo;
     });
   }
 
@@ -61,7 +90,7 @@ class _ConfirmPlantScreenState extends State<ConfirmPlantScreen> {
     );
     if (key == null) return;
     setState(() {
-      _manualScientificName = key;
+      _selection = _Selection(source: _Source.manual, index: -1, scientificName: key, confidence: 1.0);
       _nameController.text = getCareInfo(key).commonNameRo;
     });
   }
@@ -76,9 +105,9 @@ class _ConfirmPlantScreenState extends State<ConfirmPlantScreen> {
 
       final plantId = await DatabaseService.instance.addPlant(
         commonName: commonName,
-        scientificName: _effectiveScientificName,
+        scientificName: _selection.scientificName,
         photoPath: widget.photoPath,
-        confidence: _effectiveConfidence,
+        confidence: _selection.confidence,
         light: lightNeedToDb(care.light),
         wateringDays: care.wateringDays,
         misting: care.misting,
@@ -129,6 +158,35 @@ class _ConfirmPlantScreenState extends State<ConfirmPlantScreen> {
     }
   }
 
+  Widget _predictionSection({
+    required String title,
+    required List<PlantPrediction> predictions,
+    required _Source source,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.neutral400)),
+        const SizedBox(height: 8),
+        if (predictions.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 4),
+            child: Text('Indisponibil pentru această scanare.', style: TextStyle(fontSize: 12, color: AppColors.neutral400)),
+          )
+        else
+          for (var i = 0; i < predictions.length; i++) ...[
+            _PredictionRow(
+              scientificName: predictions[i].scientificName,
+              label: '${predictions[i].scientificName} · ${(predictions[i].confidence * 100).round()}%',
+              selected: _selection.source == source && _selection.index == i,
+              onTap: () => _select(source, i, predictions[i]),
+            ),
+            const SizedBox(height: 8),
+          ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final care = _care;
@@ -158,29 +216,26 @@ class _ConfirmPlantScreenState extends State<ConfirmPlantScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Am identificat', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.neutral400)),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            for (var i = 0; i < widget.predictions.length; i++)
-                              AppTag(
-                                text: '${widget.predictions[i].scientificName} · ${(widget.predictions[i].confidence * 100).round()}%',
-                                leading: SpeciesThumbnail(scientificName: widget.predictions[i].scientificName, size: 20),
-                                style: _manualScientificName == null && i == _selectedIndex
-                                    ? AppTagStyle.accent
-                                    : AppTagStyle.outline,
-                                onTap: () => _selectPrediction(i),
-                              ),
-                            if (_manualScientificName != null)
-                              AppTag(
-                                text: '$_manualScientificName (manual)',
-                                leading: SpeciesThumbnail(scientificName: _manualScientificName!, size: 20),
-                                style: AppTagStyle.accent,
-                              ),
-                          ],
+                        _predictionSection(
+                          title: 'Sugestii Pl@ntNet (online)',
+                          predictions: widget.plantNetPredictions,
+                          source: _Source.plantNet,
                         ),
+                        const SizedBox(height: 16),
+                        _predictionSection(
+                          title: 'Sugestii model local (offline)',
+                          predictions: widget.localPredictions,
+                          source: _Source.local,
+                        ),
+                        if (_selection.source == _Source.manual) ...[
+                          const SizedBox(height: 8),
+                          _PredictionRow(
+                            scientificName: _selection.scientificName,
+                            label: '${_selection.scientificName} (manual)',
+                            selected: true,
+                            onTap: () {},
+                          ),
+                        ],
                         const SizedBox(height: 8),
                         GestureDetector(
                           onTap: _openManualSearch,
@@ -225,6 +280,59 @@ class _ConfirmPlantScreenState extends State<ConfirmPlantScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PredictionRow extends StatelessWidget {
+  final String scientificName;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _PredictionRow({
+    required this.scientificName,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: selected ? AppColors.accent : Colors.transparent, width: 1.5),
+          ),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                child: SpeciesThumbnail(scientificName: scientificName, size: 56),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(fontSize: 13, fontStyle: FontStyle.italic, color: AppColors.text),
+                ),
+              ),
+              Icon(
+                selected ? Icons.check_circle : Icons.circle_outlined,
+                size: 20,
+                color: selected ? AppColors.accent : AppColors.neutral600,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -278,7 +386,7 @@ class _ManualPlantSearchSheetState extends State<_ManualPlantSearchSheet> {
                         final entry = entries[i];
                         return ListTile(
                           contentPadding: EdgeInsets.zero,
-                          leading: SpeciesThumbnail(scientificName: entry.key, size: 40),
+                          leading: SpeciesThumbnail(scientificName: entry.key, size: 64),
                           title: Text(entry.value.commonNameRo, style: const TextStyle(color: AppColors.text, fontSize: 14, fontWeight: FontWeight.w500)),
                           subtitle: Text(entry.key, style: const TextStyle(color: AppColors.neutral400, fontSize: 12, fontStyle: FontStyle.italic)),
                           onTap: () => Navigator.of(context).pop(entry.key),
