@@ -131,17 +131,16 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
 
     setState(() => _status = _Status.classifying);
     try {
-      final localPredictions = await LocalPlantModelService.instance
-          .classifyImageFile(File(representative.path))
-          .catchError((_) => <PlantPrediction>[]);
-
-      // Only fall back to the Pl@ntNet API (network + rate-limited) when the
-      // local model couldn't identify anything.
-      final plantNetPredictions = localPredictions.isEmpty
-          ? await PlantIdService.instance
-              .classifyImages(shots.map((s) => File(s.path)).toList(), shots.map((s) => s.organ).toList())
-              .catchError((_) => <PlantPrediction>[])
-          : <PlantPrediction>[];
+      final results = await Future.wait([
+        LocalPlantModelService.instance
+            .classifyImageFile(File(representative.path))
+            .catchError((_) => <PlantPrediction>[]),
+        PlantIdService.instance
+            .classifyImages(shots.map((s) => File(s.path)).toList(), shots.map((s) => s.organ).toList())
+            .catchError((_) => <PlantPrediction>[]),
+      ]);
+      final localPredictions = results[0];
+      final plantNetPredictions = results[1];
 
       if (plantNetPredictions.isEmpty && localPredictions.isEmpty) {
         throw StateError('Identificarea a eșuat pentru ambele surse (Pl@ntNet și modelul local).');
