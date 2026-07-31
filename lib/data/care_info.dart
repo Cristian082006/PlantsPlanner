@@ -1,4 +1,26 @@
+import 'package:flutter/material.dart';
+
 enum LightNeed { directLight, strongIndirect, weakIndirect, shade }
+
+class LightMeta {
+  final IconData icon;
+  final String tag;
+
+  const LightMeta(this.icon, this.tag);
+}
+
+LightMeta lightMeta(LightNeed light) {
+  switch (light) {
+    case LightNeed.directLight:
+      return const LightMeta(Icons.wb_sunny_outlined, "Soare direct");
+    case LightNeed.strongIndirect:
+      return const LightMeta(Icons.wb_cloudy_outlined, "Lumină puternică");
+    case LightNeed.weakIndirect:
+      return const LightMeta(Icons.cloud_outlined, "Lumină slabă");
+    case LightNeed.shade:
+      return const LightMeta(Icons.nightlight_outlined, "Umbră");
+  }
+}
 
 String lightLabelRo(LightNeed light) {
   switch (light) {
@@ -434,6 +456,126 @@ final Map<String, CareInfo> kCareDb = {
     misting: false,
     toxicToPets: false,
     tips: ["Are tuberculi care rețin apă; nu uda excesiv."],
+  ),
+  "dracaena marginata": const CareInfo(
+    commonNameRo: "Dracaena marginata",
+    wateringDays: 10,
+    light: LightNeed.strongIndirect,
+    misting: false,
+    toxicToPets: true,
+    tips: ["Udă doar când primii 5 cm de sol sunt uscați.", "Sensibilă la excesul de clor/fluor din apa de la robinet."],
+  ),
+  "dieffenbachia seguine": const CareInfo(
+    commonNameRo: "Dieffenbachia",
+    wateringDays: 7,
+    light: LightNeed.weakIndirect,
+    misting: false,
+    toxicToPets: true,
+    tips: ["Seva este iritantă; poartă mănuși la tăiere.", "Tolerează lumină mai slabă, dar crește mai încet."],
+  ),
+  "schefflera arboricola": const CareInfo(
+    commonNameRo: "Schefflera (Copacul umbrelă)",
+    wateringDays: 7,
+    light: LightNeed.strongIndirect,
+    misting: false,
+    toxicToPets: true,
+    tips: ["Lasă solul să se usuce la suprafață între udări.", "Rotește planta periodic spre lumină pentru creștere uniformă."],
+  ),
+  "aspidistra elatior": const CareInfo(
+    commonNameRo: "Planta de fontă (Aspidistra elatior)",
+    wateringDays: 10,
+    light: LightNeed.shade,
+    misting: false,
+    toxicToPets: false,
+    tips: ["Extrem de tolerantă la neglijare și lumină slabă.", "Evită udarea excesivă; solul poate rămâne ușor uscat."],
+  ),
+  "monstera adansonii": const CareInfo(
+    commonNameRo: "Monstera adansonii (Frunza de brânză elvețiană)",
+    wateringDays: 7,
+    light: LightNeed.strongIndirect,
+    misting: true,
+    toxicToPets: true,
+    tips: ["Preferă un suport pe care să se agațe.", "Lasă solul să se usuce la suprafață între udări."],
+  ),
+  "rhaphidophora tetrasperma": const CareInfo(
+    commonNameRo: "Mini Monstera (Rhaphidophora tetrasperma)",
+    wateringDays: 7,
+    light: LightNeed.strongIndirect,
+    misting: true,
+    toxicToPets: true,
+    tips: ["Crește repede cu un suport tip moss pole.", "Udă când primii 3-4 cm de sol sunt uscați."],
+  ),
+  "scindapsus pictus": const CareInfo(
+    commonNameRo: "Pothos satinat (Scindapsus pictus)",
+    wateringDays: 8,
+    light: LightNeed.weakIndirect,
+    misting: false,
+    toxicToPets: true,
+    tips: ["Tolerează lumină mai slabă decât alte pothos.", "Lasă solul să se usuce bine între udări."],
+  ),
+  "pachira aquatica": const CareInfo(
+    commonNameRo: "Copacul banilor (Pachira aquatica)",
+    wateringDays: 9,
+    light: LightNeed.strongIndirect,
+    misting: false,
+    toxicToPets: false,
+    tips: ["Sensibil la udarea excesivă; lasă solul să se usuce parțial.", "Preferă umiditate moderată și fără curenți reci."],
+  ),
+  "platycerium bifurcatum": const CareInfo(
+    commonNameRo: "Ferigă coarne de cerb (Platycerium bifurcatum)",
+    wateringDays: 7,
+    light: LightNeed.strongIndirect,
+    misting: true,
+    toxicToPets: false,
+    tips: ["Preferă montare pe suport sau ghiveci suspendat.", "Udă prin înmuiere periodică, nu direct pe frunze."],
+  ),
+  "asplenium nidus": const CareInfo(
+    commonNameRo: "Ferigă cuib de pasăre (Asplenium nidus)",
+    wateringDays: 6,
+    light: LightNeed.weakIndirect,
+    misting: true,
+    toxicToPets: false,
+    tips: ["Preferă umiditate ridicată și sol constant reavăn.", "Nu atinge frunza centrală nouă, e fragilă."],
+  ),
+  "senecio rowleyanus": const CareInfo(
+    commonNameRo: "Șirag de perle (Senecio rowleyanus)",
+    wateringDays: 14,
+    light: LightNeed.directLight,
+    misting: false,
+    toxicToPets: true,
+    tips: ["Lasă solul să se usuce complet între udări.", "Evită udarea pe frunze (bobițe), poate duce la putrezire."],
+  ),
+  "kalanchoe blossfeldiana": const CareInfo(
+    commonNameRo: "Kalanchoe",
+    wateringDays: 9,
+    light: LightNeed.directLight,
+    misting: false,
+    toxicToPets: true,
+    tips: ["Elimină florile ofilite pentru înflorire continuă.", "Udă moderat; sensibilă la exces de apă."],
+  ),
+  "haworthia fasciata": const CareInfo(
+    commonNameRo: "Haworthia zebra (Haworthia fasciata)",
+    wateringDays: 16,
+    light: LightNeed.directLight,
+    misting: false,
+    toxicToPets: false,
+    tips: ["Sol special pentru cactuși/suculente, bine drenat.", "Udă abundent, apoi lasă solul complet uscat."],
+  ),
+  "euphorbia milii": const CareInfo(
+    commonNameRo: "Coroana de spini (Euphorbia milii)",
+    wateringDays: 10,
+    light: LightNeed.directLight,
+    misting: false,
+    toxicToPets: true,
+    tips: ["Seva este iritantă pentru piele; poartă mănuși.", "Lasă solul să se usuce bine între udări."],
+  ),
+  "ficus pumila": const CareInfo(
+    commonNameRo: "Ficus pitic agățător (Ficus pumila)",
+    wateringDays: 6,
+    light: LightNeed.weakIndirect,
+    misting: true,
+    toxicToPets: true,
+    tips: ["Preferă umiditate mai mare și sol constant reavăn.", "Poate fi tuns pentru a-și controla creșterea agățătoare."],
   ),
 };
 

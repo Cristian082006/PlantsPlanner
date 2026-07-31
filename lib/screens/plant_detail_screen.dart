@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/care_info.dart';
 import '../db/database_service.dart';
 import '../services/notification_service.dart';
+import '../theme/app_theme.dart';
 
 const _kRoMonths = [
   'ian',
@@ -64,10 +65,11 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Șterge planta'),
-        content: Text('Sigur vrei să ștergi "${plant.commonName}"?'),
+        content: Text('Sigur vrei să ștergi „${plant.commonName}"?', style: const TextStyle(color: AppColors.text)),
+        actionsPadding: const EdgeInsets.fromLTRB(0, 0, 16, 16),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Anulează')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Șterge')),
+          OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Anulează')),
+          OutlinedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Șterge')),
         ],
       ),
     );
@@ -87,81 +89,116 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    final meta = lightMeta(lightNeedFromDb(plant.light));
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Detalii plantă')),
-      body: ListView(
-        padding: const EdgeInsets.only(bottom: 32),
-        children: [
-          if (plant.photoPath != null)
-            Image.file(File(plant.photoPath!), height: 260, width: double.infinity, fit: BoxFit.cover)
-          else
-            Container(height: 260, color: const Color(0xffeeeeee)),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(plant.commonName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                Text(
-                  plant.scientificName,
-                  style: const TextStyle(fontSize: 14, color: Colors.black54, fontStyle: FontStyle.italic),
-                ),
-                const SizedBox(height: 18),
-                const Text('ÎNGRIJIRE', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black54)),
-                const SizedBox(height: 6),
-                Text('💧 Udare: la fiecare ${plant.wateringDays} zile', style: const TextStyle(fontSize: 15)),
-                Text('☀️ ${lightLabelRo(lightNeedFromDb(plant.light))}', style: const TextStyle(fontSize: 15)),
-                if (plant.misting)
-                  const Text('💦 Beneficiază de pulverizare frecventă', style: TextStyle(fontSize: 15)),
-                if (plant.toxicToPets)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8),
-                    child: Text(
-                      '⚠️ Toxică pentru animale de companie',
-                      style: TextStyle(fontSize: 14, color: Color(0xffb71c1c), fontWeight: FontWeight.w600),
-                    ),
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 14),
+              child: Row(
+                children: [
+                  AppGhostIconButton(icon: Icons.chevron_left, onPressed: () => Navigator.of(context).maybePop()),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text('Detalii plantă', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w500, color: AppColors.text)),
                   ),
-                for (final tip in plant.tips)
+                  AppGhostIconButton(icon: Icons.delete_outline, onPressed: _onDelete),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 32),
+                children: [
+                  if (plant.photoPath != null)
+                    Image.file(File(plant.photoPath!), height: 200, width: double.infinity, fit: BoxFit.cover)
+                  else
+                    Container(height: 200, color: AppColors.surface),
                   Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text('• $tip', style: const TextStyle(fontSize: 13, color: Colors.black87)),
-                  ),
-                const SizedBox(height: 20),
-                const Text('REMINDERE', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black54)),
-                const SizedBox(height: 8),
-                for (final reminder in _reminders)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: const Color(0xfff4f8f4), borderRadius: BorderRadius.circular(10)),
-                    child: Row(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(reminder.label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                              Text(
-                                'Următor: ${_formatDateRo(DateTime.fromMillisecondsSinceEpoch(reminder.nextDueAt))} · la fiecare ${reminder.intervalDays} zile',
-                                style: const TextStyle(fontSize: 12, color: Colors.black54),
-                              ),
-                            ],
-                          ),
+                        Text(plant.commonName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w500, color: AppColors.text)),
+                        Text(
+                          plant.scientificName,
+                          style: const TextStyle(fontSize: 13, color: AppColors.neutral400, fontStyle: FontStyle.italic),
                         ),
-                        FilledButton(onPressed: () => _onMarkDone(reminder), child: const Text('Marchează făcut')),
+                        const SizedBox(height: 18),
+                        const Text('Îngrijire', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.neutral400)),
+                        const SizedBox(height: 8),
+                        _CareRow(icon: Icons.water_drop_outlined, text: 'Udare: la fiecare ${plant.wateringDays} zile'),
+                        _CareRow(icon: meta.icon, text: meta.tag),
+                        if (plant.misting) const _CareRow(icon: Icons.water_outlined, text: 'Beneficiază de pulverizare frecventă'),
+                        if (plant.toxicToPets)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 4),
+                            child: _CareRow(icon: Icons.pets, text: 'Toxică pentru animale de companie', color: AppColors.accent2_300, fontSize: 13),
+                          ),
+                        for (final tip in plant.tips)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text('· $tip', style: const TextStyle(fontSize: 12, color: AppColors.neutral400)),
+                          ),
+                        const SizedBox(height: 20),
+                        const Text('Remindere', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.neutral400)),
+                        const SizedBox(height: 8),
+                        for (final reminder in _reminders) ...[
+                          AppCard(
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(reminder.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.text)),
+                                      Text(
+                                        'Următor: ${_formatDateRo(DateTime.fromMillisecondsSinceEpoch(reminder.nextDueAt))} · la fiecare ${reminder.intervalDays} zile',
+                                        style: const TextStyle(fontSize: 12, color: AppColors.neutral400),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                OutlinedButton(onPressed: () => _onMarkDone(reminder), child: const Text('Marchează făcut')),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
                       ],
                     ),
                   ),
-                const SizedBox(height: 16),
-                Center(
-                  child: TextButton(
-                    onPressed: _onDelete,
-                    child: const Text('Șterge planta', style: TextStyle(color: Color(0xffb71c1c))),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CareRow extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color color;
+  final double fontSize;
+
+  const _CareRow({required this.icon, required this.text, this.color = AppColors.text, this.fontSize = 14});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: fontSize, color: color == AppColors.text ? AppColors.accent : color),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: TextStyle(fontSize: fontSize, color: color))),
         ],
       ),
     );

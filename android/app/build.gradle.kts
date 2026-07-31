@@ -20,8 +20,7 @@ android {
         applicationId = "com.plantsplanner.plants_planner"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        // tflite_flutter necesită minim API 26 pentru bibliotecile native TensorFlow Lite.
-        minSdk = 26
+        minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
