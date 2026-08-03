@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import '../data/care_info.dart';
 import '../db/database_service.dart';
 import '../models/plant_prediction.dart';
+import '../services/app_tab_controller.dart';
 import '../services/notification_service.dart';
+import '../services/species_thumbnail_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/species_thumbnail.dart';
-import 'plant_detail_screen.dart';
 
 enum _Source { plantNet, local, manual }
 
@@ -28,12 +29,14 @@ class ConfirmPlantScreen extends StatefulWidget {
   final String photoPath;
   final List<PlantPrediction> plantNetPredictions;
   final List<PlantPrediction> localPredictions;
+  final bool hideSuggestions;
 
   const ConfirmPlantScreen({
     super.key,
     required this.photoPath,
     required this.plantNetPredictions,
     required this.localPredictions,
+    this.hideSuggestions = false,
   });
 
   @override
@@ -149,10 +152,8 @@ class _ConfirmPlantScreenState extends State<ConfirmPlantScreen> {
       }
 
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => PlantDetailScreen(plantId: plantId)),
-        (route) => route.isFirst,
-      );
+      AppTabController.instance.showHomeTab();
+      Navigator.of(context).popUntil((route) => route.isFirst);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -191,7 +192,14 @@ class _ConfirmPlantScreenState extends State<ConfirmPlantScreen> {
   Widget build(BuildContext context) {
     final care = _care;
     final meta = lightMeta(care.light);
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        AppTabController.instance.showHomeTab();
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      },
+      child: Scaffold(
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -200,7 +208,13 @@ class _ConfirmPlantScreenState extends State<ConfirmPlantScreen> {
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 14),
               child: Row(
                 children: [
-                  AppGhostIconButton(icon: Icons.chevron_left, onPressed: () => Navigator.of(context).maybePop()),
+                  AppGhostIconButton(
+                    icon: Icons.chevron_left,
+                    onPressed: () {
+                      AppTabController.instance.showHomeTab();
+                      Navigator.of(context).popUntil((route) => route.isFirst);
+                    },
+                  ),
                   const SizedBox(width: 8),
                   const Text('Confirmă planta', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w500, color: AppColors.text)),
                 ],
@@ -210,33 +224,35 @@ class _ConfirmPlantScreenState extends State<ConfirmPlantScreen> {
               child: ListView(
                 padding: const EdgeInsets.only(bottom: 32),
                 children: [
-                  Image.file(File(widget.photoPath), height: 200, width: double.infinity, fit: BoxFit.cover),
+                  _SelectedPlantPhoto(scientificName: _selection.scientificName, fallbackPhotoPath: widget.photoPath),
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _predictionSection(
-                          title: 'Sugestii Pl@ntNet (online)',
-                          predictions: widget.plantNetPredictions,
-                          source: _Source.plantNet,
-                        ),
-                        const SizedBox(height: 16),
-                        _predictionSection(
-                          title: 'Sugestii model local (offline)',
-                          predictions: widget.localPredictions,
-                          source: _Source.local,
-                        ),
-                        if (_selection.source == _Source.manual) ...[
-                          const SizedBox(height: 8),
-                          _PredictionRow(
-                            scientificName: _selection.scientificName,
-                            label: '${_selection.scientificName} (manual)',
-                            selected: true,
-                            onTap: () {},
+                        if (!widget.hideSuggestions) ...[
+                          _predictionSection(
+                            title: 'Sugestii Pl@ntNet (online)',
+                            predictions: widget.plantNetPredictions,
+                            source: _Source.plantNet,
                           ),
+                          const SizedBox(height: 16),
+                          _predictionSection(
+                            title: 'Sugestii model local (offline)',
+                            predictions: widget.localPredictions,
+                            source: _Source.local,
+                          ),
+                          if (_selection.source == _Source.manual) ...[
+                            const SizedBox(height: 8),
+                            _PredictionRow(
+                              scientificName: _selection.scientificName,
+                              label: '${_selection.scientificName} (manual)',
+                              selected: true,
+                              onTap: () {},
+                            ),
+                          ],
+                          const SizedBox(height: 8),
                         ],
-                        const SizedBox(height: 8),
                         GestureDetector(
                           onTap: _openManualSearch,
                           child: const Text(
@@ -282,7 +298,40 @@ class _ConfirmPlantScreenState extends State<ConfirmPlantScreen> {
           ],
         ),
       ),
+      ),
     );
+  }
+}
+
+class _SelectedPlantPhoto extends StatelessWidget {
+  final String scientificName;
+  final String fallbackPhotoPath;
+
+  const _SelectedPlantPhoto({required this.scientificName, required this.fallbackPhotoPath});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<String?>(
+      key: ValueKey(scientificName),
+      future: SpeciesThumbnailService.instance.getThumbnailUrl(scientificName),
+      builder: (context, snapshot) {
+        final url = snapshot.data;
+        if (url != null) {
+          return Image.network(
+            url,
+            height: 200,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => _fallback(),
+          );
+        }
+        return _fallback();
+      },
+    );
+  }
+
+  Widget _fallback() {
+    return Image.file(File(fallbackPhotoPath), height: 200, width: double.infinity, fit: BoxFit.cover);
   }
 }
 

@@ -10,6 +10,7 @@ import '../models/plant_prediction.dart';
 import '../services/local_plant_model_service.dart';
 import '../services/plant_id_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/species_thumbnail.dart';
 import 'confirm_plant_screen.dart';
 
 class CameraScreen extends StatefulWidget {
@@ -19,7 +20,7 @@ class CameraScreen extends StatefulWidget {
   State<CameraScreen> createState() => _CameraScreenState();
 }
 
-enum _Status { requestingPermission, permissionDenied, initializing, ready, noCamera, classifying }
+enum _Status { requestingPermission, permissionDenied, initializing, ready, noCamera, classifying, revealing }
 
 class _Shot {
   final String path;
@@ -43,6 +44,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   _Status _status = _Status.requestingPermission;
   bool _permanentlyDenied = false;
   final List<_Shot> _shots = [];
+  PlantPrediction? _revealedPrediction;
+  Completer<void>? _revealTapCompleter;
 
   @override
   void initState() {
@@ -131,6 +134,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
 
     setState(() => _status = _Status.classifying);
     try {
+      const minSearchDuration = Duration(milliseconds: 3500);
+      final stopwatch = Stopwatch()..start();
       final results = await Future.wait([
         LocalPlantModelService.instance
             .classifyImageFile(File(representative.path))
@@ -139,6 +144,10 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             .classifyImages(shots.map((s) => File(s.path)).toList(), shots.map((s) => s.organ).toList())
             .catchError((_) => <PlantPrediction>[]),
       ]);
+      final remaining = minSearchDuration - stopwatch.elapsed;
+      if (remaining > Duration.zero) {
+        await Future.delayed(remaining);
+      }
       final localPredictions = results[0];
       final plantNetPredictions = results[1];
 
@@ -146,13 +155,25 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         throw StateError('Identificarea a eșuat pentru ambele surse (Pl@ntNet și modelul local).');
       }
 
+      final isPlantNet = plantNetPredictions.isNotEmpty;
+      final topPrediction = isPlantNet ? plantNetPredictions.first : localPredictions.first;
+      if (!mounted) return;
+      final tapCompleter = Completer<void>();
+      _revealTapCompleter = tapCompleter;
+      setState(() {
+        _status = _Status.revealing;
+        _revealedPrediction = topPrediction;
+      });
+      await tapCompleter.future;
+
       if (!mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => ConfirmPlantScreen(
             photoPath: representative.path,
-            plantNetPredictions: plantNetPredictions,
-            localPredictions: localPredictions,
+            plantNetPredictions: isPlantNet ? [topPrediction] : [],
+            localPredictions: isPlantNet ? [] : [topPrediction],
+            hideSuggestions: true,
           ),
         ),
       );
@@ -169,12 +190,20 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         );
       }
     } finally {
+      _revealTapCompleter = null;
       if (mounted) {
         setState(() {
           _status = _Status.ready;
           _shots.clear();
+          _revealedPrediction = null;
         });
       }
+    }
+  }
+
+  void _onRevealTap() {
+    if (!(_revealTapCompleter?.isCompleted ?? true)) {
+      _revealTapCompleter!.complete();
     }
   }
 
@@ -213,6 +242,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         return const Scaffold(body: Center(child: Text('Nu s-a găsit nicio cameră disponibilă.', style: TextStyle(color: AppColors.text))));
       case _Status.ready:
       case _Status.classifying:
+      case _Status.revealing:
         final controller = _controller!;
         final canIdentifyNow = _shots.length >= _minShotsToIdentify && _status == _Status.ready;
         final instruction = _shotInstructions[_shots.length.clamp(0, _shotInstructions.length - 1)];
@@ -278,17 +308,15 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                   ),
                 ),
               ),
-              if (_status == _Status.classifying)
-                Container(
-                  color: Colors.black54,
-                  child: const Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircularProgressIndicator(color: AppColors.accent),
-                        SizedBox(height: 12),
-                        Text('Se identifică planta...', style: TextStyle(color: Colors.white)),
-                      ],
+              if (_status == _Status.classifying || _status == _Status.revealing)
+                GestureDetector(
+                  onTap: _status == _Status.revealing ? _onRevealTap : null,
+                  child: Container(
+                    color: Colors.black54,
+                    child: Center(
+                      child: _status == _Status.revealing && _revealedPrediction != null
+                          ? _RevealedPlantCard(prediction: _revealedPrediction!)
+                          : const _SearchingPhoneAnimation(),
                     ),
                   ),
                 ),
@@ -330,5 +358,118 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
           ),
         );
     }
+  }
+}
+
+/// Phone-with-camera icon that jitters/shakes while a scan is in progress.
+class _SearchingPhoneAnimation extends StatefulWidget {
+  const _SearchingPhoneAnimation();
+
+  @override
+  State<_SearchingPhoneAnimation> createState() => _SearchingPhoneAnimationState();
+}
+
+class _SearchingPhoneAnimationState extends State<_SearchingPhoneAnimation> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 260))..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final phoneSize = (screenSize.shortestSide * 0.75).clamp(160.0, 520.0);
+    final cameraBadgeSize = phoneSize * 0.32;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            final t = _controller.value;
+            final angle = (t - 0.5) * 0.22; // gentle shake, ± ~6°
+            final dx = (t - 0.5) * (phoneSize * 0.12);
+            return Transform.translate(
+              offset: Offset(dx, 0),
+              child: Transform.rotate(angle: angle, child: child),
+            );
+          },
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(Icons.smartphone, size: phoneSize, color: AppColors.accent),
+              Positioned(
+                bottom: phoneSize * 0.16,
+                right: phoneSize * 0.05,
+                child: Icon(Icons.camera_alt, size: cameraBadgeSize, color: Colors.white),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        const Text('Se caută planta...', style: TextStyle(color: Colors.white, fontSize: 16)),
+      ],
+    );
+  }
+}
+
+/// Briefly shown once the top match is known, before handing off to the
+/// confirmation screen: the species reference photo in a small frame.
+class _RevealedPlantCard extends StatelessWidget {
+  final PlantPrediction prediction;
+
+  const _RevealedPlantCard({required this.prediction});
+
+  @override
+  Widget build(BuildContext context) {
+    final photoSize = MediaQuery.of(context).size.shortestSide * 0.5;
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutBack,
+      builder: (context, t, child) => Opacity(
+        opacity: t.clamp(0, 1),
+        child: Transform.scale(scale: 0.85 + 0.15 * t, child: child),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.accent, width: 3),
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              color: AppColors.surface,
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              child: SpeciesThumbnail(scientificName: prediction.scientificName, size: photoSize),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            prediction.scientificName,
+            style: const TextStyle(fontSize: 14, fontStyle: FontStyle.italic, color: Colors.white, fontWeight: FontWeight.w500),
+          ),
+          Text(
+            '${(prediction.confidence * 100).round()}% potrivire',
+            style: const TextStyle(fontSize: 12, color: AppColors.neutral400),
+          ),
+          const SizedBox(height: 16),
+          const Text('Atinge ecranul pentru a continua', style: TextStyle(fontSize: 12, color: Colors.white70)),
+        ],
+      ),
+    );
   }
 }

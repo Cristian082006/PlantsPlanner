@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'screens/camera_screen.dart';
 import 'screens/home_screen.dart';
+import 'services/app_tab_controller.dart';
 import 'services/local_plant_model_service.dart';
 import 'services/notification_service.dart';
 import 'theme/app_theme.dart';
@@ -31,7 +32,6 @@ class RootScreen extends StatefulWidget {
 }
 
 class _RootScreenState extends State<RootScreen> {
-  int _tabIndex = 0;
   final GlobalKey<HomeScreenState> _homeKey = GlobalKey<HomeScreenState>();
 
   @override
@@ -40,18 +40,30 @@ class _RootScreenState extends State<RootScreen> {
     NotificationService.instance.init();
     NotificationService.instance.requestPermissions();
     LocalPlantModelService.instance.load();
-  }
-
-  void _selectTab(int index) {
-    setState(() => _tabIndex = index);
-    if (index == 0) _homeKey.currentState?.refresh();
+    AppTabController.instance.tabIndex.addListener(_onTabChanged);
   }
 
   @override
+  void dispose() {
+    AppTabController.instance.tabIndex.removeListener(_onTabChanged);
+    super.dispose();
+  }
+
+  void _onTabChanged() {
+    if (AppTabController.instance.tabIndex.value == 0) {
+      _homeKey.currentState?.refresh();
+    }
+    setState(() {});
+  }
+
+  void _selectTab(int index) => AppTabController.instance.tabIndex.value = index;
+
+  @override
   Widget build(BuildContext context) {
+    final tabIndex = AppTabController.instance.tabIndex.value;
     return Scaffold(
       body: IndexedStack(
-        index: _tabIndex,
+        index: tabIndex,
         children: [
           HomeScreen(key: _homeKey),
           const CameraScreen(),
@@ -71,13 +83,13 @@ class _RootScreenState extends State<RootScreen> {
                 _TabButton(
                   icon: Icons.eco_outlined,
                   label: 'Plantele mele',
-                  selected: _tabIndex == 0,
+                  selected: tabIndex == 0,
                   onTap: () => _selectTab(0),
                 ),
                 _TabButton(
                   icon: Icons.camera_alt_outlined,
                   label: 'Identifică',
-                  selected: _tabIndex == 1,
+                  selected: tabIndex == 1,
                   onTap: () => _selectTab(1),
                 ),
               ],
