@@ -48,3 +48,5 @@ app.*.map.json
 
 # API keys — never commit
 lib/config/plantnet_config.dart
+lib/config/perenual_config.dart
+lib/config/trefle_config.dart

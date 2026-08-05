@@ -22,20 +22,66 @@ class SpeciesThumbnailService {
 
     if (_cache.containsKey(key)) return _cache[key];
 
-    try {
-      final uri = Uri.https('en.wikipedia.org', '/api/rest_v1/page/summary/$key');
-      final response = await http.get(uri).timeout(const Duration(seconds: 6));
-      if (response.statusCode != 200) {
-        _cache[key] = null;
-        return null;
+    // Try the name as-is, then the bare binomial (dropping "var.", "subsp.",
+    // "f.", "cv." qualifiers the local model sometimes returns), then fall
+    // back to Wikipedia's search API to resolve synonyms/redirects.
+    final binomial = _binomialOf(key);
+    final candidates = <String>{key, if (binomial != key) binomial};
+
+    for (final candidate in candidates) {
+      final url = await _summaryThumbnail(candidate);
+      if (url != null) {
+        _cache[key] = url;
+        return url;
       }
+    }
+
+    final resolvedTitle = await _searchTitle(binomial);
+    if (resolvedTitle != null) {
+      final url = await _summaryThumbnail(resolvedTitle);
+      if (url != null) {
+        _cache[key] = url;
+        return url;
+      }
+    }
+
+    _cache[key] = null;
+    return null;
+  }
+
+  String _binomialOf(String name) {
+    final parts = name.split(RegExp(r'\s+'));
+    return parts.length >= 2 ? '${parts[0]} ${parts[1]}' : name;
+  }
+
+  Future<String?> _summaryThumbnail(String title) async {
+    try {
+      final uri = Uri.https('en.wikipedia.org', '/api/rest_v1/page/summary/$title');
+      final response = await http.get(uri).timeout(const Duration(seconds: 6));
+      if (response.statusCode != 200) return null;
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       final thumbnail = body['thumbnail'] as Map<String, dynamic>?;
-      final url = thumbnail?['source'] as String?;
-      _cache[key] = url;
-      return url;
+      return thumbnail?['source'] as String?;
     } catch (_) {
-      _cache[key] = null;
+      return null;
+    }
+  }
+
+  Future<String?> _searchTitle(String query) async {
+    try {
+      final uri = Uri.https('en.wikipedia.org', '/w/api.php', {
+        'action': 'opensearch',
+        'search': query,
+        'limit': '1',
+        'namespace': '0',
+        'format': 'json',
+      });
+      final response = await http.get(uri).timeout(const Duration(seconds: 6));
+      if (response.statusCode != 200) return null;
+      final body = jsonDecode(response.body) as List<dynamic>;
+      final titles = body.length > 1 ? body[1] as List<dynamic> : const [];
+      return titles.isNotEmpty ? titles.first as String : null;
+    } catch (_) {
       return null;
     }
   }

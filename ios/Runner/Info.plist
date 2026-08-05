@@ -28,6 +28,10 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Camera este folosită pentru a fotografia plantele și a le identifica direct pe telefon, fără a trimite pozele pe internet.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Accesul la galerie este folosit pentru a identifica o plantă dintr-o poză deja făcută.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Locația este folosită pentru a afla temperatura de afară și a ajusta cât de des să uzi plantele.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

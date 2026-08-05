@@ -3,11 +3,14 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../models/disease_prediction.dart';
 import '../models/plant_prediction.dart';
 import '../services/local_plant_model_service.dart';
+import '../services/plant_disease_service.dart';
 import '../services/plant_id_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/species_thumbnail.dart';
@@ -20,7 +23,15 @@ class CameraScreen extends StatefulWidget {
   State<CameraScreen> createState() => _CameraScreenState();
 }
 
-enum _Status { requestingPermission, permissionDenied, initializing, ready, noCamera, classifying, revealing }
+enum _Status {
+  requestingPermission,
+  permissionDenied,
+  initializing,
+  ready,
+  noCamera,
+  classifying,
+  revealing,
+}
 
 class _Shot {
   final String path;
@@ -28,22 +39,11 @@ class _Shot {
   const _Shot(this.path, this.organ);
 }
 
-// Pl@ntNet identifies houseplants more reliably from a close-up leaf shot
-// plus a whole-plant shot; a third optional flower/fruit shot helps further.
-const List<String> _shotOrgans = ['leaf', 'auto', 'flower'];
-const List<String> _shotInstructions = [
-  'Fotografiază frunza de aproape',
-  'Acum fotografiază planta întreagă',
-  'Opțional: o floare sau un fruct',
-];
-const int _maxShots = 3;
-const int _minShotsToIdentify = 2;
-
-class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver {
+class _CameraScreenState extends State<CameraScreen>
+    with WidgetsBindingObserver {
   CameraController? _controller;
   _Status _status = _Status.requestingPermission;
   bool _permanentlyDenied = false;
-  final List<_Shot> _shots = [];
   PlantPrediction? _revealedPrediction;
   Completer<void>? _revealTapCompleter;
 
@@ -75,7 +75,11 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       (c) => c.lensDirection == CameraLensDirection.back,
       orElse: () => cameras.first,
     );
-    final controller = CameraController(back, ResolutionPreset.high, enableAudio: false);
+    final controller = CameraController(
+      back,
+      ResolutionPreset.high,
+      enableAudio: false,
+    );
     await controller.initialize();
     if (!mounted) return;
     setState(() {
@@ -93,13 +97,10 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _status == _Status.permissionDenied) {
+    if (state == AppLifecycleState.resumed &&
+        _status == _Status.permissionDenied) {
       _setup();
     }
-  }
-
-  void _resetShots() {
-    setState(() => _shots.clear());
   }
 
   Future<void> _deleteQuietly(String path) async {
@@ -111,52 +112,78 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   Future<void> _onCapture() async {
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) return;
-    if (_shots.length >= _maxShots) return;
+    if (_status != _Status.ready) return;
 
-    final organ = _shotOrgans[_shots.length];
     final xfile = await controller.takePicture();
     final docsDir = await getApplicationDocumentsDirectory();
-    final fileName = 'plant_${DateTime.now().millisecondsSinceEpoch}_$organ.jpg';
+    final fileName = 'plant_${DateTime.now().millisecondsSinceEpoch}_auto.jpg';
     final savedPath = p.join(docsDir.path, fileName);
     await File(xfile.path).copy(savedPath);
 
-    setState(() => _shots.add(_Shot(savedPath, organ)));
-
-    if (_shots.length >= _maxShots) {
-      await _identify();
-    }
+    await _identifyShots([_Shot(savedPath, 'auto')]);
   }
 
-  Future<void> _identify() async {
-    if (_shots.isEmpty) return;
-    final shots = List<_Shot>.from(_shots);
-    final representative = shots.firstWhere((s) => s.organ == 'auto', orElse: () => shots.first);
+  Future<void> _pickFromGallery() async {
+    if (_status != _Status.ready) return;
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 90,
+    );
+    if (picked == null || !mounted) return;
+
+    final docsDir = await getApplicationDocumentsDirectory();
+    final fileName =
+        'plant_${DateTime.now().millisecondsSinceEpoch}_gallery.jpg';
+    final savedPath = p.join(docsDir.path, fileName);
+    await File(picked.path).copy(savedPath);
+
+    await _identifyShots([_Shot(savedPath, 'auto')]);
+  }
+
+  Future<void> _identifyShots(List<_Shot> shots) async {
+    if (shots.isEmpty) return;
+    final representative = shots.firstWhere(
+      (s) => s.organ == 'auto',
+      orElse: () => shots.first,
+    );
 
     setState(() => _status = _Status.classifying);
     try {
       const minSearchDuration = Duration(milliseconds: 3500);
       final stopwatch = Stopwatch()..start();
-      final results = await Future.wait([
-        LocalPlantModelService.instance
-            .classifyImageFile(File(representative.path))
-            .catchError((_) => <PlantPrediction>[]),
-        PlantIdService.instance
-            .classifyImages(shots.map((s) => File(s.path)).toList(), shots.map((s) => s.organ).toList())
-            .catchError((_) => <PlantPrediction>[]),
-      ]);
+      // Boala se caută pe aceeași poză, în paralel cu identificarea speciei —
+      // dacă eșuează (fără internet, etc.) nu blochează identificarea.
+      final localFuture = LocalPlantModelService.instance
+          .classifyImageFile(File(representative.path))
+          .catchError((_) => <PlantPrediction>[]);
+      final plantNetFuture = PlantIdService.instance
+          .classifyImages(
+            shots.map((s) => File(s.path)).toList(),
+            shots.map((s) => s.organ).toList(),
+          )
+          .catchError((_) => <PlantPrediction>[]);
+      final diseaseFuture = PlantDiseaseService.instance
+          .diagnoseImage(File(representative.path))
+          .catchError((_) => <DiseasePrediction>[]);
+
+      final localPredictions = await localFuture;
+      final plantNetPredictions = await plantNetFuture;
+      final diseasePredictions = await diseaseFuture;
       final remaining = minSearchDuration - stopwatch.elapsed;
       if (remaining > Duration.zero) {
         await Future.delayed(remaining);
       }
-      final localPredictions = results[0];
-      final plantNetPredictions = results[1];
 
       if (plantNetPredictions.isEmpty && localPredictions.isEmpty) {
-        throw StateError('Identificarea a eșuat pentru ambele surse (Pl@ntNet și modelul local).');
+        throw StateError(
+          'Identificarea a eșuat pentru ambele surse (Pl@ntNet și modelul local).',
+        );
       }
 
       final isPlantNet = plantNetPredictions.isNotEmpty;
-      final topPrediction = isPlantNet ? plantNetPredictions.first : localPredictions.first;
+      final topPrediction = isPlantNet
+          ? plantNetPredictions.first
+          : localPredictions.first;
       if (!mounted) return;
       final tapCompleter = Completer<void>();
       _revealTapCompleter = tapCompleter;
@@ -173,6 +200,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             photoPath: representative.path,
             plantNetPredictions: isPlantNet ? [topPrediction] : [],
             localPredictions: isPlantNet ? [] : [topPrediction],
+            diseasePredictions: diseasePredictions,
             hideSuggestions: true,
           ),
         ),
@@ -186,7 +214,11 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e is StateError ? e.message : 'Identificarea a eșuat.')),
+          SnackBar(
+            content: Text(
+              e is StateError ? e.message : 'Identificarea a eșuat.',
+            ),
+          ),
         );
       }
     } finally {
@@ -194,7 +226,6 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       if (mounted) {
         setState(() {
           _status = _Status.ready;
-          _shots.clear();
           _revealedPrediction = null;
         });
       }
@@ -226,12 +257,16 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                         ? 'Accesul la cameră a fost refuzat. Activează-l din Setări pentru a identifica plantele.'
                         : 'Aplicația are nevoie de acces la cameră pentru a identifica plantele.',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: AppColors.text),
+                    style: TextStyle(color: AppColors.text),
                   ),
                   const SizedBox(height: 16),
                   OutlinedButton(
                     onPressed: _permanentlyDenied ? openAppSettings : _setup,
-                    child: Text(_permanentlyDenied ? 'Deschide Setări' : 'Permite accesul la cameră'),
+                    child: Text(
+                      _permanentlyDenied
+                          ? 'Deschide Setări'
+                          : 'Permite accesul la cameră',
+                    ),
                   ),
                 ],
               ),
@@ -239,13 +274,18 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
           ),
         );
       case _Status.noCamera:
-        return const Scaffold(body: Center(child: Text('Nu s-a găsit nicio cameră disponibilă.', style: TextStyle(color: AppColors.text))));
+        return Scaffold(
+          body: Center(
+            child: Text(
+              'Nu s-a găsit nicio cameră disponibilă.',
+              style: TextStyle(color: AppColors.text),
+            ),
+          ),
+        );
       case _Status.ready:
       case _Status.classifying:
       case _Status.revealing:
         final controller = _controller!;
-        final canIdentifyNow = _shots.length >= _minShotsToIdentify && _status == _Status.ready;
-        final instruction = _shotInstructions[_shots.length.clamp(0, _shotInstructions.length - 1)];
         return Scaffold(
           backgroundColor: Colors.black,
           body: Stack(
@@ -256,42 +296,26 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                 top: 54,
                 left: 16,
                 right: 16,
-                child: Row(
-                  children: [
-                    Flexible(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            color: const Color(0x8c161826),
-                            child: Text(
-                              '$instruction (${_shots.length}/$_maxShots)',
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.white),
-                            ),
-                          ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      color: const Color(0x8c161826),
+                      child: const Text(
+                        'Fotografiază planta — o singură poză e de-ajuns',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
                         ),
                       ),
                     ),
-                    if (_shots.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                          child: GestureDetector(
-                            onTap: _status == _Status.ready ? _resetShots : null,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              color: const Color(0x8c161826),
-                              child: const Text('Renunță', style: TextStyle(fontSize: 13, color: Colors.white)),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
               ),
               Positioned(
@@ -302,19 +326,25 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                 child: IgnorePointer(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      border: Border.all(color: const Color(0x59e9e9ed), width: 1.5),
+                      border: Border.all(
+                        color: const Color(0x59e9e9ed),
+                        width: 1.5,
+                      ),
                       borderRadius: BorderRadius.circular(18),
                     ),
                   ),
                 ),
               ),
-              if (_status == _Status.classifying || _status == _Status.revealing)
+              if (_status == _Status.classifying ||
+                  _status == _Status.revealing)
                 GestureDetector(
                   onTap: _status == _Status.revealing ? _onRevealTap : null,
                   child: Container(
                     color: Colors.black54,
                     child: Center(
-                      child: _status == _Status.revealing && _revealedPrediction != null
+                      child:
+                          _status == _Status.revealing &&
+                              _revealedPrediction != null
                           ? _RevealedPlantCard(prediction: _revealedPrediction!)
                           : const _SearchingPhoneAnimation(),
                     ),
@@ -326,29 +356,70 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                 right: 0,
                 child: Column(
                   children: [
-                    if (canIdentifyNow) ...[
-                      OutlinedButton(
-                        onPressed: _identify,
-                        child: Text('Identifică acum (${_shots.length} poze)'),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-                    GestureDetector(
-                      onTap: _status == _Status.ready ? _onCapture : null,
-                      child: Container(
-                        width: 72,
-                        height: 72,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.9), width: 4),
-                        ),
-                        child: Center(
-                          child: Container(
-                            width: 58,
-                            height: 58,
-                            decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 56,
+                            height: 56,
+                            child: GestureDetector(
+                              onTap: _status == _Status.ready
+                                  ? _pickFromGallery
+                                  : null,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(28),
+                                child: BackdropFilter(
+                                  filter: ImageFilter.blur(
+                                    sigmaX: 8,
+                                    sigmaY: 8,
+                                  ),
+                                  child: Container(
+                                    color: const Color(0x8c161826),
+                                    child: const Icon(
+                                      Icons.photo_library_outlined,
+                                      color: Colors.white,
+                                      size: 24,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
+                          Expanded(
+                            child: Center(
+                              child: GestureDetector(
+                                onTap: _status == _Status.ready
+                                    ? _onCapture
+                                    : null,
+                                child: Container(
+                                  width: 72,
+                                  height: 72,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.9,
+                                      ),
+                                      width: 4,
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Container(
+                                      width: 58,
+                                      height: 58,
+                                      decoration: const BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 56),
+                        ],
                       ),
                     ),
                   ],
@@ -366,16 +437,21 @@ class _SearchingPhoneAnimation extends StatefulWidget {
   const _SearchingPhoneAnimation();
 
   @override
-  State<_SearchingPhoneAnimation> createState() => _SearchingPhoneAnimationState();
+  State<_SearchingPhoneAnimation> createState() =>
+      _SearchingPhoneAnimationState();
 }
 
-class _SearchingPhoneAnimationState extends State<_SearchingPhoneAnimation> with SingleTickerProviderStateMixin {
+class _SearchingPhoneAnimationState extends State<_SearchingPhoneAnimation>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 260))..repeat(reverse: true);
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    )..repeat(reverse: true);
   }
 
   @override
@@ -411,13 +487,20 @@ class _SearchingPhoneAnimationState extends State<_SearchingPhoneAnimation> with
               Positioned(
                 bottom: phoneSize * 0.16,
                 right: phoneSize * 0.05,
-                child: Icon(Icons.camera_alt, size: cameraBadgeSize, color: Colors.white),
+                child: Icon(
+                  Icons.camera_alt,
+                  size: cameraBadgeSize,
+                  color: Colors.white,
+                ),
               ),
             ],
           ),
         ),
         const SizedBox(height: 20),
-        const Text('Se caută planta...', style: TextStyle(color: Colors.white, fontSize: 16)),
+        const Text(
+          'Se caută planta...',
+          style: TextStyle(color: Colors.white, fontSize: 16),
+        ),
       ],
     );
   }
@@ -454,20 +537,31 @@ class _RevealedPlantCard extends StatelessWidget {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(AppRadius.sm),
-              child: SpeciesThumbnail(scientificName: prediction.scientificName, size: photoSize),
+              child: SpeciesThumbnail(
+                scientificName: prediction.scientificName,
+                size: photoSize,
+              ),
             ),
           ),
           const SizedBox(height: 12),
           Text(
             prediction.scientificName,
-            style: const TextStyle(fontSize: 14, fontStyle: FontStyle.italic, color: Colors.white, fontWeight: FontWeight.w500),
+            style: const TextStyle(
+              fontSize: 14,
+              fontStyle: FontStyle.italic,
+              color: Colors.white,
+              fontWeight: FontWeight.w500,
+            ),
           ),
           Text(
             '${(prediction.confidence * 100).round()}% potrivire',
-            style: const TextStyle(fontSize: 12, color: AppColors.neutral400),
+            style: TextStyle(fontSize: 12, color: AppColors.neutral400),
           ),
           const SizedBox(height: 16),
-          const Text('Atinge ecranul pentru a continua', style: TextStyle(fontSize: 12, color: Colors.white70)),
+          const Text(
+            'Atinge ecranul pentru a continua',
+            style: TextStyle(fontSize: 12, color: Colors.white70),
+          ),
         ],
       ),
     );

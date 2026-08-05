@@ -39,7 +39,7 @@ const Map<String, String> kSpeciesThumbnails = {
   'hedera helix':
       'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c8/Ivy_Hedera_Red_Brick_Wall_2892px.jpg/500px-Ivy_Hedera_Red_Brick_Wall_2892px.jpg',
   'aglaonema commutatum':
-      'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/20260317_Aglaonema_commutatum.jpg/500px-20260317_Aglaonema_commutatum.jpg',
+      'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Aglaonema_commutatum_%27Silver_Queen%27_01.jpg/500px-Aglaonema_commutatum_%27Silver_Queen%27_01.jpg',
   'anthurium andraeanum':
       'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Anthurium_andraeanum%2C_jard%C3%ADn_bot%C3%A1nico_de_Tallinn%2C_Estonia%2C_2012-08-13%2C_DD_01.JPG/500px-Anthurium_andraeanum%2C_jard%C3%ADn_bot%C3%A1nico_de_Tallinn%2C_Estonia%2C_2012-08-13%2C_DD_01.JPG',
   'tradescantia zebrina':
@@ -48,8 +48,10 @@ const Map<String, String> kSpeciesThumbnails = {
       'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Helecho_de_Boston_%28Nephrolepis_exaltata%29.jpg/500px-Helecho_de_Boston_%28Nephrolepis_exaltata%29.jpg',
   'chamaedorea elegans':
       'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f5/Chamaedorea_elegans.jpg/500px-Chamaedorea_elegans.jpg',
+  // Wikipedia's default photo was a mature wild tree on a Mexican hillside;
+  // most people picture the compact bulbous-base potted houseplant form.
   'beaucarnea recurvata':
-      'https://upload.wikimedia.org/wikipedia/commons/thumb/9/95/Beaucarnea_recurvata%2C_Llera%2C_Tamaulipas%2C_Mexico_1.jpg/500px-Beaucarnea_recurvata%2C_Llera%2C_Tamaulipas%2C_Mexico_1.jpg',
+      'https://upload.wikimedia.org/wikipedia/commons/thumb/0/00/Starr-070906-8683-Beaucarnea_recurvata-in_pot-Kula_Ace_Hardware_and_Nursery-Maui_%2824264927063%29.jpg/500px-Starr-070906-8683-Beaucarnea_recurvata-in_pot-Kula_Ace_Hardware_and_Nursery-Maui_%2824264927063%29.jpg',
   'pilea peperomioides':
       'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f6/%28MHNT%29_Pilea_peperomioides_Foliage.jpg/500px-%28MHNT%29_Pilea_peperomioides_Foliage.jpg',
   'maranta leuconeura':
@@ -90,18 +92,26 @@ const Map<String, String> kSpeciesThumbnails = {
       'https://upload.wikimedia.org/wikipedia/commons/thumb/9/96/Echeveria-elegans-rose.jpg/500px-Echeveria-elegans-rose.jpg',
   'calathea orbifolia':
       'https://upload.wikimedia.org/wikipedia/commons/thumb/d/dc/Calathea_orbifolia-1-my_chedi-foot_hill-yercaud-salem-India.jpg/500px-Calathea_orbifolia-1-my_chedi-foot_hill-yercaud-salem-India.jpg',
+  // Previous entry was a 19th-century botanical illustration, not a photo.
   'begonia rex':
-      'https://upload.wikimedia.org/wikipedia/commons/thumb/0/06/Begonia_rex.jpg/500px-Begonia_rex.jpg',
+      'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/Begonia_rex_-_Botanischer_Garten_-_Heidelberg%2C_Germany_-_DSC00987.jpg/500px-Begonia_rex_-_Botanischer_Garten_-_Heidelberg%2C_Germany_-_DSC00987.jpg',
   'alocasia amazonica':
       'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Alocasia_amazonica_var.jpg/500px-Alocasia_amazonica_var.jpg',
   'yucca elephantipes':
       'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d1/Yucca_elephantipes_HRM2.JPG/500px-Yucca_elephantipes_HRM2.JPG',
+  // Previous entry was a closeup of the odd tubular flower; the trailing
+  // heart-shaped leaves are what actually make this plant recognizable.
   'ceropegia woodii':
-      'https://upload.wikimedia.org/wikipedia/commons/5/55/Ceropegia_linearis_subsp_woodii.jpg',
+      'https://upload.wikimedia.org/wikipedia/commons/thumb/3/33/Ceropegia_woodii_-_leaves.JPG/500px-Ceropegia_woodii_-_leaves.JPG',
   'dracaena marginata':
       'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f9/Dracaena_marginata_IndoorPlant_0605k.jpg/330px-Dracaena_marginata_IndoorPlant_0605k.jpg',
+  // Wikipedia's own summary photo for "Dracaena reflexa" is a wild tree on
+  // a cliffside in Réunion, not the compact variegated "Song of India" pot
+  // form most people mean — override with a representative houseplant shot.
+  'dracaena reflexa':
+      'https://upload.wikimedia.org/wikipedia/commons/thumb/0/06/Dracaena_reflexa_Song_of_India_1.jpg/500px-Dracaena_reflexa_Song_of_India_1.jpg',
   'dieffenbachia seguine':
-      'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Dieffenbachia_seguine_kz05.jpg/500px-Dieffenbachia_seguine_kz05.jpg',
+      'https://upload.wikimedia.org/wikipedia/commons/thumb/4/49/Dieffenbachia_%28405648176%29.jpg/500px-Dieffenbachia_%28405648176%29.jpg',
   'schefflera arboricola':
       'https://upload.wikimedia.org/wikipedia/commons/thumb/8/85/Dwarf_Umbrella_Tree_%28Schefflera_arboricola%29.jpg/500px-Dwarf_Umbrella_Tree_%28Schefflera_arboricola%29.jpg',
   'aspidistra elatior':
@@ -112,8 +122,10 @@ const Map<String, String> kSpeciesThumbnails = {
       'https://upload.wikimedia.org/wikipedia/commons/thumb/d/db/Rhaphidophora_tetrasperma.jpg/500px-Rhaphidophora_tetrasperma.jpg',
   'scindapsus pictus':
       'https://upload.wikimedia.org/wikipedia/commons/thumb/c/ca/Scindapsus_pictus_01.jpg/500px-Scindapsus_pictus_01.jpg',
+  // Previous entry was a tall greenhouse specimen shot from below; the
+  // braided trunk is the plant's signature houseplant feature.
   'pachira aquatica':
-      'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Pachira_aquatica_at_Olbrich.jpg/500px-Pachira_aquatica_at_Olbrich.jpg',
+      'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6a/Braided_Money_Tree_Plant_%28Pachira_aquatica%29.jpg/500px-Braided_Money_Tree_Plant_%28Pachira_aquatica%29.jpg',
   'platycerium bifurcatum':
       'https://upload.wikimedia.org/wikipedia/commons/thumb/9/9c/Platycerium-bifurcatum-SF24298-01.jpg/500px-Platycerium-bifurcatum-SF24298-01.jpg',
   'asplenium nidus':
