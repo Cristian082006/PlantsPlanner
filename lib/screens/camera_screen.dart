@@ -11,6 +11,7 @@ import '../models/disease_prediction.dart';
 import '../models/plant_prediction.dart';
 import '../services/local_plant_model_service.dart';
 import '../services/plant_disease_service.dart';
+import '../services/onboarding_keys.dart';
 import '../services/plant_id_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/species_thumbnail.dart';
@@ -389,6 +390,7 @@ class _CameraScreenState extends State<CameraScreen>
                           Expanded(
                             child: Center(
                               child: GestureDetector(
+                                key: OnboardingKeys.cameraShutter,
                                 onTap: _status == _Status.ready
                                     ? _onCapture
                                     : null,

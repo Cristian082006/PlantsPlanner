@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import '../services/onboarding_coach_controller.dart';
+import '../services/onboarding_keys.dart';
 import '../theme/app_theme.dart';
 import '../widgets/plants_backdrop.dart';
 
@@ -44,7 +46,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+                key: OnboardingKeys.settingsReplay,
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
+                child: AppCard(
+                  onTap: () => OnboardingCoachController.instance.start(),
+                  child: Row(
+                    children: [
+                      Icon(Icons.help_outline, color: AppColors.accent),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Vezi din nou tutorialul',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.text,
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right,
+                        color: AppColors.neutral400,
+                        size: 20,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                 child: AppCard(
                   child: Row(
                     children: [

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/care_info.dart';
 import '../db/database_service.dart';
 import '../services/notification_service.dart';
+import '../services/onboarding_keys.dart';
 import '../services/photo_paths.dart';
 import '../services/weather_service.dart';
 import '../theme/app_theme.dart';
@@ -158,6 +159,7 @@ class HomeScreenState extends State<HomeScreen> {
 
   Widget _roomChipsRow() {
     return Container(
+      key: OnboardingKeys.roomChipsRow,
       color: AppColors.bg,
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
       child: SizedBox(
@@ -421,11 +423,19 @@ class _RoomChip extends StatelessWidget {
               ),
             );
           },
-          child: AnimatedScale(
-            scale: hovering ? 3.0 : 1.0,
+          // Slide the enlarged label up and clear of the dragged card, which
+          // sits centered on the finger right over this chip — otherwise the
+          // two texts would land on top of each other and neither reads.
+          child: AnimatedSlide(
+            offset: hovering ? const Offset(0, -1.6) : Offset.zero,
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOut,
-            child: AppTag(text: room, style: style, onTap: onTap),
+            child: AnimatedScale(
+              scale: hovering ? 3.0 : 1.0,
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOut,
+              child: AppTag(text: room, style: style, onTap: onTap),
+            ),
           ),
         );
       },

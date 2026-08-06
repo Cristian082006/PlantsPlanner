@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../data/disease_treatment.dart';
 import '../models/disease_prediction.dart';
+import '../services/onboarding_keys.dart';
 import '../services/plant_disease_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/plants_backdrop.dart';
@@ -147,6 +148,7 @@ class _PickSourceView extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           SizedBox(
+            key: OnboardingKeys.diagnoseCapture,
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: () => onPick(ImageSource.camera),

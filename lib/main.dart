@@ -6,8 +6,12 @@ import 'screens/settings_screen.dart';
 import 'services/app_tab_controller.dart';
 import 'services/local_plant_model_service.dart';
 import 'services/notification_service.dart';
+import 'services/onboarding_coach_controller.dart';
+import 'services/onboarding_keys.dart';
+import 'services/onboarding_service.dart';
 import 'services/photo_paths.dart';
 import 'theme/app_theme.dart';
+import 'widgets/coach_mark_overlay.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,6 +42,80 @@ const _kIdentifyTabColor = Color(0xff3b82f6);
 const _kDiagnoseTabColor = Color(0xfff5a524);
 const _kSettingsTabColor = Color(0xff8b5cf6);
 
+/// The guided tour: each step switches to a tab and spotlights one real
+/// widget on it (via [OnboardingKeys]) rather than a mocked-up
+/// illustration. Steps without a useful target (the welcome step) just
+/// show their text centered.
+final List<CoachMarkStep> kOnboardingSteps = [
+  const CoachMarkStep(
+    tabIndex: 0,
+    title: 'Bine ai venit în Plants Planner',
+    description:
+        'Un tur rapid prin aplicație — ating direct fiecare parte pe măsură '
+        'ce o explic.',
+  ),
+  CoachMarkStep(
+    tabIndex: 0,
+    targetKey: OnboardingKeys.tabPlants,
+    title: 'Plantele mele',
+    description: 'Aici vezi toate plantele tale, organizate pe camere.',
+  ),
+  CoachMarkStep(
+    tabIndex: 0,
+    targetKey: OnboardingKeys.roomChipsRow,
+    title: 'Filtrează pe camere',
+    description: 'Atinge o cameră ca să vezi doar plantele din ea.',
+  ),
+  CoachMarkStep(
+    tabIndex: 0,
+    targetKey: OnboardingKeys.roomChipsRow,
+    title: 'Trage și plasează',
+    description:
+        'Ține apăsat pe o plantă din listă și trage-o peste o cameră ca '
+        's-o muți acolo — camera se mărește cât timp o ții deasupra, ca '
+        'să vezi clar unde o lași.',
+  ),
+  CoachMarkStep(
+    tabIndex: 1,
+    targetKey: OnboardingKeys.tabIdentify,
+    title: 'Identifică',
+    description: 'De aici adaugi o plantă nouă — faci o poză și o recunoști.',
+  ),
+  CoachMarkStep(
+    tabIndex: 1,
+    targetKey: OnboardingKeys.cameraShutter,
+    title: 'Fă o poză',
+    description:
+        'Recunoașterea rulează local, pe telefon, plus Pl@ntNet pentru '
+        'precizie mai mare.',
+    shape: BoxShape.circle,
+  ),
+  CoachMarkStep(
+    tabIndex: 2,
+    targetKey: OnboardingKeys.tabDiagnose,
+    title: 'Diagnoză',
+    description: 'Dacă o plantă pare bolnavă, aici o poți verifica.',
+  ),
+  CoachMarkStep(
+    tabIndex: 2,
+    targetKey: OnboardingKeys.diagnoseCapture,
+    title: 'Caută boli și dăunători',
+    description: 'O poză la frunza afectată e de-ajuns pentru un diagnostic.',
+  ),
+  CoachMarkStep(
+    tabIndex: 3,
+    targetKey: OnboardingKeys.tabSettings,
+    title: 'Setări',
+    description: 'Programul de udare se ajustează automat după vremea de afară.',
+  ),
+  CoachMarkStep(
+    tabIndex: 3,
+    targetKey: OnboardingKeys.settingsReplay,
+    title: 'Gata de pornire',
+    description: 'Poți relua oricând acest tutorial de aici.',
+  ),
+];
+
 class RootScreen extends StatefulWidget {
   const RootScreen({super.key});
 
@@ -56,6 +134,9 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
     NotificationService.instance.requestPermissions();
     LocalPlantModelService.instance.load();
     AppTabController.instance.tabIndex.addListener(_onTabChanged);
+    OnboardingService.instance.hasSeenOnboarding().then((seen) {
+      if (mounted && !seen) OnboardingCoachController.instance.start();
+    });
   }
 
   @override
@@ -82,63 +163,86 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
   void _selectTab(int index) =>
       AppTabController.instance.tabIndex.value = index;
 
+  void _onOnboardingFinished() {
+    OnboardingCoachController.instance.stop();
+    OnboardingService.instance.markOnboardingSeen();
+    AppTabController.instance.showHomeTab();
+  }
+
   @override
   Widget build(BuildContext context) {
     final tabIndex = AppTabController.instance.tabIndex.value;
-    return Scaffold(
-      body: IndexedStack(
-        index: tabIndex,
-        children: [
-          HomeScreen(key: _homeKey),
-          const CameraScreen(),
-          const DiagnoseScreen(),
-          const SettingsScreen(),
-        ],
-      ),
-      bottomNavigationBar: DecoratedBox(
-        decoration: BoxDecoration(
-          color: AppColors.bg,
-          border: Border(top: BorderSide(color: AppColors.divider)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Row(
-              children: [
-                _TabButton(
-                  icon: Icons.eco_outlined,
-                  label: 'Plantele mele',
-                  color: _kHomeTabColor,
-                  selected: tabIndex == 0,
-                  onTap: () => _selectTab(0),
+    return Stack(
+      children: [
+        Scaffold(
+          body: IndexedStack(
+            index: tabIndex,
+            children: [
+              HomeScreen(key: _homeKey),
+              const CameraScreen(),
+              const DiagnoseScreen(),
+              const SettingsScreen(),
+            ],
+          ),
+          bottomNavigationBar: DecoratedBox(
+            decoration: BoxDecoration(
+              color: AppColors.bg,
+              border: Border(top: BorderSide(color: AppColors.divider)),
+            ),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  children: [
+                    _TabButton(
+                      key: OnboardingKeys.tabPlants,
+                      icon: Icons.eco_outlined,
+                      label: 'Plantele mele',
+                      color: _kHomeTabColor,
+                      selected: tabIndex == 0,
+                      onTap: () => _selectTab(0),
+                    ),
+                    _TabButton(
+                      key: OnboardingKeys.tabIdentify,
+                      icon: Icons.camera_alt_outlined,
+                      label: 'Identifică',
+                      color: _kIdentifyTabColor,
+                      selected: tabIndex == 1,
+                      onTap: () => _selectTab(1),
+                    ),
+                    _TabButton(
+                      key: OnboardingKeys.tabDiagnose,
+                      icon: Icons.health_and_safety_outlined,
+                      label: 'Diagnoză',
+                      color: _kDiagnoseTabColor,
+                      selected: tabIndex == 2,
+                      onTap: () => _selectTab(2),
+                    ),
+                    _TabButton(
+                      key: OnboardingKeys.tabSettings,
+                      icon: Icons.settings_outlined,
+                      label: 'Setări',
+                      color: _kSettingsTabColor,
+                      selected: tabIndex == 3,
+                      onTap: () => _selectTab(3),
+                    ),
+                  ],
                 ),
-                _TabButton(
-                  icon: Icons.camera_alt_outlined,
-                  label: 'Identifică',
-                  color: _kIdentifyTabColor,
-                  selected: tabIndex == 1,
-                  onTap: () => _selectTab(1),
-                ),
-                _TabButton(
-                  icon: Icons.health_and_safety_outlined,
-                  label: 'Diagnoză',
-                  color: _kDiagnoseTabColor,
-                  selected: tabIndex == 2,
-                  onTap: () => _selectTab(2),
-                ),
-                _TabButton(
-                  icon: Icons.settings_outlined,
-                  label: 'Setări',
-                  color: _kSettingsTabColor,
-                  selected: tabIndex == 3,
-                  onTap: () => _selectTab(3),
-                ),
-              ],
+              ),
             ),
           ),
         ),
-      ),
+        ValueListenableBuilder<bool>(
+          valueListenable: OnboardingCoachController.instance.active,
+          builder: (context, active, _) => active
+              ? CoachMarkOverlay(
+                  steps: kOnboardingSteps,
+                  onFinished: _onOnboardingFinished,
+                )
+              : const SizedBox.shrink(),
+        ),
+      ],
     );
   }
 }
@@ -151,6 +255,7 @@ class _TabButton extends StatelessWidget {
   final VoidCallback onTap;
 
   const _TabButton({
+    super.key,
     required this.icon,
     required this.label,
     required this.color,
